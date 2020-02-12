@@ -162,7 +162,6 @@ gender_db <-
   summarise(women = sum(woman),
             men = n() - women)
 
-
 # Select income variables and demographic characteristics
 hh_income_db <- households %>%
   select(hh_id = DB030,
