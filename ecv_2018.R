@@ -14,6 +14,27 @@ weighted.median.default <- function(x, w, ..., na.rm = FALSE) {
   unname(wtd.quantile(x, probs = 0.5, w))
 }
 
+# Gini index
+gini <- function(z, w) {
+  n <- length(z)
+  oidx <- order(z)
+  wo <- w[oidx] / sum(w)
+  zo <- z[oidx]
+  x <- wo / 2 + c(0, cumsum(wo)[-n])
+  zo_mean <- sum(zo * wo)
+  2 * sum(wo * (zo - zo_mean) * x) / zo_mean
+}
+
+# Lorenz curve
+lorenz <- function(z, w) {
+  n <- length(z)
+  oidx <- order(z)
+  wo <- w[oidx] / sum(w)
+  zo <- z[oidx]
+  tibble(x = wo / 2 + c(0, cumsum(wo)[-n]),
+         y = cumsum(zo * wo) / sum(zo * wo))
+}
+
 
 # Read original data files
 orig_data_dir <- file.path('data', 'orig')
@@ -199,6 +220,16 @@ hh_income_db %$%
 hh_income_db %$%
   weighted.mean(ydisp_cu < poverty_line, weight * men)
 
+# Poverty gap
+hh_income_db %>%
+  mutate(ratio = if_else (ydisp_cu <= poverty_line,
+                          (poverty_line - ydisp_cu) / poverty_line, 0)) %>%
+  summarise(gap = weighted.mean(ratio, weight * people))
+
+hh_income_db %>%
+  filter(ydisp_cu < poverty_line) %>%
+  summarise(G = gini(ydisp_cu, weight * people))
+
 # Fraction of women in the 3rd decile
 hh_income_db %$%
   weighted.mean(decile == 3, weight * women)
@@ -212,6 +243,11 @@ hh_income_db %>%
   group_by(region) %>%
   summarise(d1 = weighted.mean(decile == 1, weight * people))
 
+# Gini by region
+hh_income_db %>%
+  group_by(region) %>%
+  summarise(G = gini(ydisp_cu, weight * people))
+
 # s80/s20
 y_quintiles <-
   hh_income_db %>%
@@ -220,4 +256,20 @@ y_quintiles <-
 
 
 y_quintiles %$% { yd_q[5] / yd_q[1] }
+
+
+# Palma ratio
+y_deciles <-
+  hh_income_db %>%
+  group_by(decile) %>%
+  summarise(yd_q = weighted.mean(ydisp_cu,  weight * people))
+
+y_deciles %$% { sum(yd_q[10]) / sum(yd_q[1:4]) }
+
+
+# Gini index
+hh_income_db %$% gini(ydisp_cu, weight * people)
+
+# Lorenz curve
+hh_income_db %$% lorenz(ydisp_cu, weight * people) %$% plot(x, y, type = 'l')
 
