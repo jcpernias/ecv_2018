@@ -3,7 +3,19 @@ library(magrittr)
 
 library(Hmisc)
 
-# Read data files
+weighted.median <- function(x, w, ...) {
+  UseMethod("weighted.median")
+}
+
+weighted.median.default <- function(x, w, ..., na.rm = FALSE) {
+  if (missing(w)) {
+    return(median(x, na.rm = na.rm))
+  }
+  unname(wtd.quantile(x, probs = 0.5, w))
+}
+
+
+# Read original data files
 orig_data_dir <- file.path('data', 'orig')
 
 
@@ -104,26 +116,20 @@ p_file_db <-
              PHD02T = 'd'
            ))
 
+# Join household databases
 households <- d_file_db %>%
   left_join(h_file_db, by = c('DB030' = 'HB030'))
 
+# Join data for adults
 adults <- r_file_db %>%
   right_join(p_file_db, by = c('RB030' = 'PB030'))
 
+# Isolate data for children
 children <- r_file_db %>%
   anti_join(p_file_db, by = c('RB030' = 'PB030'))
 
 
-
-hh_income_db <- households %>%
-  select(hh_id = DB030,
-         ydisp = vhRentaa,
-         ydisp_ir = vhRentaAIa,
-         num_people = HX040,
-         eq_scale = HX240,
-         hh_weight = DB090,
-         region = DB040)
-
+# Build gender variables
 gender_db <-
   bind_rows(adults %>%
               transmute(hh_id = as.integer(RB030 / 100),
@@ -135,69 +141,83 @@ gender_db <-
   summarise(women = sum(woman),
             men = n() - women)
 
-hh_income_db <-
-  left_join(hh_income_db, gender_db, by = 'hh_id')
 
+# Select income variables and demographic characteristics
+hh_income_db <- households %>%
+  select(hh_id = DB030,
+         people = HX040,
+         cunits = HX240,
+         weight = DB090,
+         region = DB040,
+         ydisp_hh = vhRentaa,
+         ydisp_ir_hh = vhRentaAIa) %>%
+  mutate(ydisp_cu = ydisp_hh / cunits,
+         ydisp_ir_cu = ydisp_ir_hh / cunits) %>%
+  left_join(gender_db, by = 'hh_id')
+
+# Add deciles and quintiles
 decile_limits <-
   hh_income_db %$%
-  wtd.quantile(ydisp / eq_scale,
+  wtd.quantile(ydisp_cu,
                probs = (0:10)/10,
-               weights = hh_weight * num_people)
+               weights = weight * people)
 
 hh_income_db <-
   hh_income_db %>%
   mutate(decile =
-           cut(ydisp / eq_scale, decile_limits,
+           cut(ydisp_cu, decile_limits,
                include.lowest = TRUE, labels = FALSE),
          quintile = as.integer((decile-1)/2) + 1)
 
 
-
+# Average disposable income per consumption unit (total)
 ydisp_mean <- hh_income_db %$%
-  weighted.mean(ydisp/eq_scale, hh_weight * num_people)
+  weighted.mean(ydisp_cu, weight * people)
 
+# Average disposable income per consumption unit (women)
 hh_income_db %$%
-  weighted.mean(ydisp/eq_scale, hh_weight * women)
+  weighted.mean(ydisp_cu, weight * women)
 
+# Average disposable income per consumption unit (men)
 hh_income_db %$%
-  weighted.mean(ydisp/eq_scale, hh_weight * men)
+  weighted.mean(ydisp_cu, weight * men)
 
-
-
-hh_income_db %$% weighted.mean(ydisp/num_people,
-                               hh_weight * num_people)
-
-hh_income_db %$% weighted.mean(ydisp_ir/eq_scale,
-                               hh_weight * num_people)
-
-hh_income_db %$% weighted.mean(ydisp_ir/num_people,
-                               hh_weight * num_people)
-
-
+# Poverty line: 60% of the median disposable income per c.u.
 poverty_line <-
   hh_income_db %$%
-    wtd.quantile(ydisp / eq_scale, probs = 0.5,
-                 weights = hh_weight * num_people) * 0.6
+    weighted.median(ydisp_cu, weight * people) * 0.6
 
-
-
+# Poverty risk rate (total)
 pov_rate <- hh_income_db %$%
-  weighted.mean(ydisp/eq_scale < poverty_line, hh_weight * num_people)
+  weighted.mean(ydisp_cu < poverty_line, weight * people)
 
+# Poverty risk rate (women)
 hh_income_db %$%
-  weighted.mean(ydisp / eq_scale < poverty_line, hh_weight * women)
+  weighted.mean(ydisp_cu < poverty_line, weight * women)
 
+# Poverty risk rate (men)
 hh_income_db %$%
-  weighted.mean(ydisp / eq_scale < poverty_line, hh_weight * men)
+  weighted.mean(ydisp_cu < poverty_line, weight * men)
 
-
+# Fraction of women in the 3rd decile
 hh_income_db %$%
-  weighted.mean(decile == 3, hh_weight * women)
+  weighted.mean(decile == 3, weight * women)
 
+# Fraction of men in the 3rd decile
+hh_income_db %$%
+  weighted.mean(decile == 3, weight * men)
+
+# Fraction of people in the first decile across regions
 hh_income_db %>%
   group_by(region) %>%
-  summarise(d1 = weighted.mean(decile == 1, hh_weight * num_people))
+  summarise(d1 = weighted.mean(decile == 1, weight * people))
 
-hh_income_db %>%
+# s80/s20
+y_quintiles <-
+  hh_income_db %>%
   group_by(quintile) %>%
-  summarise(y = sum(ydisp / eq_scale * hh_weight * num_people))
+  summarise(yd_q = weighted.mean(ydisp_cu,  weight * people))
+
+
+y_quintiles %$% { yd_q[5] / yd_q[1] }
+
