@@ -1,4 +1,7 @@
 library(tidyverse)
+library(magrittr)
+
+library(Hmisc)
 
 # Read data files
 orig_data_dir <- file.path('data', 'orig')
@@ -110,24 +113,44 @@ adults <- r_file_db %>%
 children <- r_file_db %>%
   anti_join(p_file_db, by = c('RB030' = 'PB030'))
 
-library(Hmisc)
 
-wtd.quantile(hh_data$income/hh_data$eq_scale,
-             probs = (0:10)/10,
-             weights = hh_data$hh_weight * hh_data$people,
-             normwt = FALSE)
 
-weighted.mean(hh_data$income/hh_data$eq_scale,
-              hh_data$hh_weight * hh_data$people)
+hh_income_db <- households %>%
+  select(ydisp = vhRentaa,
+         ydisp_ir = vhRentaAIa,
+         num_people = HX040,
+         eq_scale = HX240,
+         hh_weight = DB090,
+         region = DB040)
 
-weighted.mean(hh_data$income/hh_data$people,
-              hh_data$hh_weight * hh_data$people)
 
-quantile(hh_data$income/hh_data$eq_scale, (0:10)/10)
+ydisp_mean <- hh_income_db %$%
+  weighted.mean(ydisp/eq_scale, hh_weight * num_people)
 
-vRentaa <- hogar_db$vhRentaa
-hx240 <- hogar_db$
-renta <- vRentaa / hx240
 
-quantile(renta, (0:10)/10)
+hh_income_db %$% weighted.mean(ydisp/num_people,
+                               hh_weight * num_people)
+
+hh_income_db %$% weighted.mean(ydisp_ir/eq_scale,
+                               hh_weight * num_people)
+
+hh_income_db %$% weighted.mean(ydisp_ir/num_people,
+                               hh_weight * num_people)
+
+
+poverty_line <-
+  hh_income_db %$%
+    wtd.quantile(ydisp / eq_scale, probs = 0.5,
+                 weights = hh_weight * num_people) * 0.6
+
+
+
+pov_rate <- hh_income_db %$%
+  weighted.mean(ydisp/eq_scale < poverty_line, hh_weight * num_people)
+
+hh_income_db %$%
+  wtd.quantile(ydisp / eq_scale,
+               probs = (0:10)/10,
+               weights = hh_weight * num_people)
+
 
