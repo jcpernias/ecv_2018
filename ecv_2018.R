@@ -116,16 +116,52 @@ children <- r_file_db %>%
 
 
 hh_income_db <- households %>%
-  select(ydisp = vhRentaa,
+  select(hh_id = DB030,
+         ydisp = vhRentaa,
          ydisp_ir = vhRentaAIa,
          num_people = HX040,
          eq_scale = HX240,
          hh_weight = DB090,
          region = DB040)
 
+gender_db <-
+  bind_rows(adults %>%
+              transmute(hh_id = as.integer(RB030 / 100),
+                        woman = RB090 == 2),
+            children %>%
+              transmute(hh_id = as.integer(RB030 / 100),
+                        woman = RB090 == 2)) %>%
+  group_by(hh_id) %>%
+  summarise(women = sum(woman),
+            men = n() - women)
+
+hh_income_db <-
+  left_join(hh_income_db, gender_db, by = 'hh_id')
+
+decile_limits <-
+  hh_income_db %$%
+  wtd.quantile(ydisp / eq_scale,
+               probs = (0:10)/10,
+               weights = hh_weight * num_people)
+
+hh_income_db <-
+  hh_income_db %>%
+  mutate(decile =
+           cut(ydisp / eq_scale, decile_limits,
+               include.lowest = TRUE, labels = FALSE),
+         quintile = as.integer((decile-1)/2) + 1)
+
+
 
 ydisp_mean <- hh_income_db %$%
   weighted.mean(ydisp/eq_scale, hh_weight * num_people)
+
+hh_income_db %$%
+  weighted.mean(ydisp/eq_scale, hh_weight * women)
+
+hh_income_db %$%
+  weighted.mean(ydisp/eq_scale, hh_weight * men)
+
 
 
 hh_income_db %$% weighted.mean(ydisp/num_people,
@@ -149,8 +185,19 @@ pov_rate <- hh_income_db %$%
   weighted.mean(ydisp/eq_scale < poverty_line, hh_weight * num_people)
 
 hh_income_db %$%
-  wtd.quantile(ydisp / eq_scale,
-               probs = (0:10)/10,
-               weights = hh_weight * num_people)
+  weighted.mean(ydisp / eq_scale < poverty_line, hh_weight * women)
+
+hh_income_db %$%
+  weighted.mean(ydisp / eq_scale < poverty_line, hh_weight * men)
 
 
+hh_income_db %$%
+  weighted.mean(decile == 3, hh_weight * women)
+
+hh_income_db %>%
+  group_by(region) %>%
+  summarise(d1 = weighted.mean(decile == 1, hh_weight * num_people))
+
+hh_income_db %>%
+  group_by(quintile) %>%
+  summarise(y = sum(ydisp / eq_scale * hh_weight * num_people))
