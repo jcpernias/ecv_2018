@@ -101,20 +101,14 @@ p_file_db <-
              PHD02T = 'd'
            ))
 
+households <- d_file_db %>%
+  left_join(h_file_db, by = c('DB030' = 'HB030'))
 
-hh_base <- hogar_base_db %>%
-  select(hh_id = DB030,
-         region = DB040,
-         hh_weight = DB090,
-         urb = DB100)
+adults <- r_file_db %>%
+  right_join(p_file_db, by = c('RB030' = 'PB030'))
 
-hh_data <- hogar_db %>%
-  select(income = vhRentaa,
-         eq_scale = HX240,
-         people = HX040,
-         hh_id = HB030) %>%
-  left_join(hh_base, by = 'hh_id')
-
+children <- r_file_db %>%
+  anti_join(p_file_db, by = c('RB030' = 'PB030'))
 
 library(Hmisc)
 
