@@ -229,13 +229,13 @@ hh_income_db %>%
   filter(ydisp_cu < poverty_line) %>%
   summarise(G = gini(ydisp_cu, weight * people))
 
-# Fraction of women in the 3rd decile
-hh_income_db %$%
-  weighted.mean(decile == 3, weight * women)
-
-# Fraction of men in the 3rd decile
-hh_income_db %$%
-  weighted.mean(decile == 3, weight * men)
+# Proportion of women and men across deciles
+hh_income_db %>%
+  mutate(num_women = sum(weight * women),
+         num_men = sum(weight * men)) %>%
+  group_by(decile) %>%
+  summarise(women_prop = sum(weight * women / num_women),
+            men_prop = sum(weight * men / num_men))
 
 # Fraction of people in the first decile across regions
 hh_income_db %>%
