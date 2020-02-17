@@ -3,6 +3,14 @@ library(magrittr)
 
 library(Hmisc)
 
+make_dummies <- function(v, prefix = '') {
+  s <- sort(unique(v))
+  d <- outer(v, s, function(v, s) 1L * (v == s))
+  colnames(d) <- paste0(prefix, s)
+  d
+}
+
+
 weighted.median <- function(x, w, ...) {
   UseMethod("weighted.median")
 }
@@ -179,6 +187,20 @@ gender_db <-
   group_by(hh_id) %>%
   summarise(women = sum(woman),
             men = n() - women)
+
+age_db <- r_file_db %>%
+  transmute(hh_id = as.integer(RB030 / 100),
+            age = 2018 - RB080,
+            woman = RB090 == 2)
+
+
+age_db <- r_file_db %>%
+  transmute(hh_id = as.integer(RB030 / 100),
+            age = 2018 - RB080,
+            age_g = cut(age, breaks = c(0, 16, 30, 45, 65, 86),
+                        labels = c('age_16', 'age_16_29', 'age_30_44',
+                                   'age_45_64', 'age_65'),
+                        include.lowest = TRUE))
 
 # Select income variables and demographic characteristics
 hh_income_db <- households %>%
