@@ -149,6 +149,24 @@ adults <- r_file_db %>%
 children <- r_file_db %>%
   anti_join(p_file_db, by = c('RB030' = 'PB030'))
 
+# Region codes
+region_codes <- c('AND', 'ARA', 'AST', 'BAL', 'CNR',
+                  'CNT', 'CYL', 'CLM', 'CAT', 'VAL',
+                  'EXT', 'GAL', 'MAD', 'MUR', 'NAV',
+                  'PVA', 'RIO', 'CEU', 'MEL')
+
+region_table <- c('ES61' = 'AND', 'ES24' = 'ARA', 'ES12' = 'AST',
+                  'ES53' = 'BAL', 'ES70' = 'CNR', 'ES13' = 'CNT',
+                  'ES41' = 'CYL', 'ES42' = 'CLM', 'ES51' = 'CAT',
+                  'ES52' = 'VAL', 'ES43' = 'EXT', 'ES11' = 'GAL',
+                  'ES30' = 'MAD', 'ES62' = 'MUR', 'ES22' = 'NAV',
+                  'ES21' = 'PVA', 'ES23' = 'RIO', 'ES63' = 'CEU',
+                  'ES64' = 'MEL')
+
+region_db <- households %>%
+  transmute(hh_id = DB030,
+            region = factor(region_table[DB040],
+                            levels = region_codes))
 
 # Build gender variables
 gender_db <-
@@ -168,12 +186,12 @@ hh_income_db <- households %>%
          people = HX040,
          cunits = HX240,
          weight = DB090,
-         region = DB040,
          ydisp_hh = vhRentaa,
          ydisp_ir_hh = vhRentaAIa) %>%
   mutate(ydisp_cu = ydisp_hh / cunits,
          ydisp_ir_cu = ydisp_ir_hh / cunits) %>%
-  left_join(gender_db, by = 'hh_id')
+  left_join(gender_db, by = 'hh_id') %>%
+  left_join(region_db, by = 'hh_id')
 
 # Add deciles and quintiles
 decile_limits <-
