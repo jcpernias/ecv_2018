@@ -272,3 +272,16 @@ hh_income_db %$% gini(ydisp_cu, weight * people)
 # Lorenz curve
 hh_income_db %$% lorenz(ydisp_cu, weight * people) %$% plot(x, y, type = 'l')
 
+# Gini index
+hh_income_db %>%
+  group_by(region) %>%
+  summarise(G = gini(ydisp_cu, weight * people))
+
+
+## TODO
+## - Age dummies
+## - Transfers: survival vs other
+## - Direct taxes and contributions to social insurance
+## - Using the remotes package to install from github
+## - Comparing Lorenz curves of different regions
+## - Comparing SWF
