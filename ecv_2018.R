@@ -3,14 +3,6 @@ library(magrittr)
 
 library(Hmisc)
 
-make_dummies <- function(v, prefix = '') {
-  s <- sort(unique(v))
-  d <- outer(v, s, function(v, s) 1L * (v == s))
-  colnames(d) <- paste0(prefix, s)
-  d
-}
-
-
 weighted.median <- function(x, w, ...) {
   UseMethod("weighted.median")
 }
@@ -158,49 +150,56 @@ children <- r_file_db %>%
   anti_join(p_file_db, by = c('RB030' = 'PB030'))
 
 # Region codes
-region_codes <- c('AND', 'ARA', 'AST', 'BAL', 'CNR',
-                  'CNT', 'CYL', 'CLM', 'CAT', 'VAL',
-                  'EXT', 'GAL', 'MAD', 'MUR', 'NAV',
-                  'PVA', 'RIO', 'CEU', 'MEL')
+region_codes <-
+  c('AND', 'ARA', 'AST', 'BAL', 'CNR',
+    'CNT', 'CYL', 'CLM', 'CAT', 'VAL',
+    'EXT', 'GAL', 'MAD', 'MUR', 'NAV',
+    'PVA', 'RIO', 'CEU', 'MEL')
 
-region_table <- c('ES61' = 'AND', 'ES24' = 'ARA', 'ES12' = 'AST',
-                  'ES53' = 'BAL', 'ES70' = 'CNR', 'ES13' = 'CNT',
-                  'ES41' = 'CYL', 'ES42' = 'CLM', 'ES51' = 'CAT',
-                  'ES52' = 'VAL', 'ES43' = 'EXT', 'ES11' = 'GAL',
-                  'ES30' = 'MAD', 'ES62' = 'MUR', 'ES22' = 'NAV',
-                  'ES21' = 'PVA', 'ES23' = 'RIO', 'ES63' = 'CEU',
-                  'ES64' = 'MEL')
+region_table <- setNames(
+  region_codes,
+  c('ES61', 'ES24', 'ES12', 'ES53', 'ES70',
+    'ES13', 'ES41', 'ES42', 'ES51', 'ES52',
+    'ES43', 'ES11', 'ES30', 'ES62', 'ES22',
+    'ES21', 'ES23', 'ES63', 'ES64'))
 
 region_db <- households %>%
   transmute(hh_id = DB030,
             region = factor(region_table[DB040],
                             levels = region_codes))
 
-# Build gender variables
-gender_db <-
-  bind_rows(adults %>%
-              transmute(hh_id = as.integer(RB030 / 100),
-                        woman = RB090 == 2),
-            children %>%
-              transmute(hh_id = as.integer(RB030 / 100),
-                        woman = RB090 == 2)) %>%
+# Build age and gender variables
+
+gender_codes <- c('M', 'F')
+
+gender_age_db <- r_file_db %>%
+  transmute(hh_id = as.integer(RB030 / 100),
+            gender = factor(gender_codes[RB090],
+                            gender_codes),
+            age = cut(2018 - RB080,
+                      breaks = c(0, 16, 30, 45, 65, 90),
+                      labels = c('age_15', 'age_16_29', 'age_30_44',
+                                 'age_45_64', 'age_65'),
+                      right = FALSE)) %>%
   group_by(hh_id) %>%
-  summarise(women = sum(woman),
-            men = n() - women)
-
-age_db <- r_file_db %>%
-  transmute(hh_id = as.integer(RB030 / 100),
-            age = 2018 - RB080,
-            woman = RB090 == 2)
-
-
-age_db <- r_file_db %>%
-  transmute(hh_id = as.integer(RB030 / 100),
-            age = 2018 - RB080,
-            age_g = cut(age, breaks = c(0, 16, 30, 45, 65, 86),
-                        labels = c('age_16', 'age_16_29', 'age_30_44',
-                                   'age_45_64', 'age_65'),
-                        include.lowest = TRUE))
+  summarise(f_age_15    = sum(gender == 'F' & age == 'age_15'),
+            f_age_16_29 = sum(gender == 'F' & age == 'age_16_29'),
+            f_age_30_44 = sum(gender == 'F' & age == 'age_30_44'),
+            f_age_45_64 = sum(gender == 'F' & age == 'age_45_64'),
+            f_age_65    = sum(gender == 'F' & age == 'age_65'),
+            m_age_15    = sum(gender == 'M' & age == 'age_15'),
+            m_age_16_29 = sum(gender == 'M' & age == 'age_16_29'),
+            m_age_30_44 = sum(gender == 'M' & age == 'age_30_44'),
+            m_age_45_64 = sum(gender == 'M' & age == 'age_45_64'),
+            m_age_65    = sum(gender == 'M' & age == 'age_65')) %>%
+  mutate(
+    men   = m_age_15 + m_age_16_29 + m_age_30_44 + m_age_45_64 + m_age_65,
+    women = f_age_15 + f_age_16_29 + f_age_30_44 + f_age_45_64 + f_age_65,
+    age_15    = m_age_15 + f_age_15,
+    age_16_29 = m_age_16_29 + f_age_16_29,
+    age_30_44 = m_age_30_44 + f_age_30_44,
+    age_45_64 = m_age_45_64 + f_age_45_64,
+    age_65    = m_age_65 + f_age_65)
 
 # Select income variables and demographic characteristics
 hh_income_db <- households %>%
@@ -212,14 +211,14 @@ hh_income_db <- households %>%
          ydisp_ir_hh = vhRentaAIa) %>%
   mutate(ydisp_cu = ydisp_hh / cunits,
          ydisp_ir_cu = ydisp_ir_hh / cunits) %>%
-  left_join(gender_db, by = 'hh_id') %>%
+  left_join(gender_age_db, by = 'hh_id') %>%
   left_join(region_db, by = 'hh_id')
 
 # Add deciles and quintiles
 decile_limits <-
   hh_income_db %$%
   wtd.quantile(ydisp_cu,
-               probs = (0:10)/10,
+               probs = seq(0, 1, length.out = 11),
                weights = weight * people)
 
 hh_income_db <-
@@ -325,3 +324,4 @@ hh_income_db %>%
 ## - Using the remotes package to install from github
 ## - Comparing Lorenz curves of different regions
 ## - Comparing SWF
+## CAT is overrepresented
