@@ -11,7 +11,7 @@ weighted.median.default <- function(x, w, ..., na.rm = FALSE) {
   if (missing(w)) {
     return(median(x, na.rm = na.rm))
   }
-  unname(wtd.quantile(x, probs = 0.5, w))
+  unname(wtd.quantile(x, probs = 0.5, w, na.rm = na.rm))
 }
 
 # Gini index
