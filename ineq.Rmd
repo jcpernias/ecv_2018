@@ -26,32 +26,38 @@ En este documento se usa la Encuesta de Condiciones de Vida elaborada por el Ins
 library(ec1047)
 ```
 
-Una vez cargado el paquete `ec1047`, puede accederse al objeto `ecv2018` que contiene los datos.
+Una vez cargado el paquete `ec1047`, puede accederse al objeto `ecv2018` que contiene los datos. 
 
 ```{r}
 str(ecv2018)
 ```
 
+Eliminamos aquellas familias cuya renta disponible es 0 o negativa.
+```{r}
+income_db <- ecv2018 %>% filter(ydisp_cu > 0.0)
+```
+
+
 ## Renta disponible
 
 La variable `ydisp_hh` es la renta disponible de las familias que forman parte de la muestra. La renta disponible media de estas familias puede calcularse como:
 ```{r}
-ecv2018 %>% summarise(yd_mean = mean(ydisp_hh))
+income_db %>% summarise(yd_mean = mean(ydisp_hh))
 ```
 
 Para cada una de estas familias se dispone de un factor de elevación `weight`, que indica, para cada familia presente en la muestra, el número de familias en la población. Para estimar la renta disponible media en la población es más conveniente usar una media ponderada:
 ```{r}
-ecv2018 %>% summarise(yd_mean = weighted.mean(ydisp_hh, weight))
+income_db %>% summarise(yd_mean = weighted.mean(ydisp_hh, weight))
 ```
 
 La variable `ydisp_cu` es la renta disponible por unidad de consumo. La renta media disponible por unidad de consumo puede estimarse: 
 ```{r}
-ecv2018 %>% summarise(yd_cu_mean = weighted.mean(ydisp_cu, weight * people))
+income_db %>% summarise(yd_cu_mean = weighted.mean(ydisp_cu, weight * people))
 ```
 
 Por Comunidades Autónomas
 ```{r}
-yd_by_reg <- ecv2018 %>%
+yd_by_reg <-  income_db %>%
   group_by(region) %>%
   summarise(yd_cu_mean = weighted.mean(ydisp_cu, weight * people))
 
@@ -78,13 +84,14 @@ w_cv <- function(x, w) {
 ```
 
 ```{r}
-cv_by_reg <- ecv2018 %>%
+cv_by_reg <- income_db %>%
   group_by(region) %>%
-  summarise(yd_cu_cv = w_cv(ydisp_cu, weight * people))
+  summarise(yd_cu_cv = w_cv(ydisp_cu, weight * people),
+            yd_cu_sd_log = sqrt(w_var(log(ydisp_cu), weight * people)))
 
 kable(left_join(yd_by_reg, cv_by_reg, by = 'region'), 
-      col.names = c('Comunidad Autónoma', 'Media', 'Coef. de variación'),
-      digits = c(0, 2, 3)) %>%
+      col.names = c('Comunidad Autónoma', 'Media', 'Coef. de variación', 'Desv. típ. logaritmo'),
+      digits = c(0, 2, 3, 3)) %>%
   kable_styling(bootstrap_options = 
                   c("striped", "hover"),
                 full_width = FALSE)
