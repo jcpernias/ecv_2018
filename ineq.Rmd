@@ -1,0 +1,93 @@
+---
+title: "Medidas de desigualdad y pobreza"
+author: "José C. Pernías"
+date: "26/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preliminares
+
+En primer lugar cargamos los paquetes que se usarán para gestionar y representar los datos. Una forma conveniente de hacerlo es:
+```{r}
+library(tidyverse)
+library(kableExtra)
+```
+
+
+## Datos
+
+En este documento se usa la Encuesta de Condiciones de Vida elaborada por el Instituto Nacional de Estadística. El paquete `ec1047`proporciona un subconjunto de las variables correspondientes al año 2018.
+
+```{r}
+library(ec1047)
+```
+
+Una vez cargado el paquete `ec1047`, puede accederse al objeto `ecv2018` que contiene los datos.
+
+```{r}
+str(ecv2018)
+```
+
+## Renta disponible
+
+La variable `ydisp_hh` es la renta disponible de las familias que forman parte de la muestra. La renta disponible media de estas familias puede calcularse como:
+```{r}
+ecv2018 %>% summarise(yd_mean = mean(ydisp_hh))
+```
+
+Para cada una de estas familias se dispone de un factor de elevación `weight`, que indica, para cada familia presente en la muestra, el número de familias en la población. Para estimar la renta disponible media en la población es más conveniente usar una media ponderada:
+```{r}
+ecv2018 %>% summarise(yd_mean = weighted.mean(ydisp_hh, weight))
+```
+
+La variable `ydisp_cu` es la renta disponible por unidad de consumo. La renta media disponible por unidad de consumo puede estimarse: 
+```{r}
+ecv2018 %>% summarise(yd_cu_mean = weighted.mean(ydisp_cu, weight * people))
+```
+
+Por Comunidades Autónomas
+```{r}
+yd_by_reg <- ecv2018 %>%
+  group_by(region) %>%
+  summarise(yd_cu_mean = weighted.mean(ydisp_cu, weight * people))
+
+kable(yd_by_reg)  %>%
+  kable_styling()
+```
+
+## Desigualdad de la renta
+
+Coeficiente de variación: desviación típica dividido entre la media.
+```{r}
+w_var <- function(x, w) {
+  w <- w / sum(w)
+  x_mean <- sum(w * x)
+  sum(w * (x - x_mean)^2)
+}
+
+w_cv <- function(x, w) {
+  w <- w / sum(w)
+  x_mean <- sum(w * x)
+  x_var <- sum(w * (x - x_mean)^2)
+  sqrt(x_var) / x_mean
+}
+```
+
+```{r}
+cv_by_reg <- ecv2018 %>%
+  group_by(region) %>%
+  summarise(yd_cu_cv = w_cv(ydisp_cu, weight * people))
+
+kable(left_join(yd_by_reg, cv_by_reg, by = 'region'), 
+      col.names = c('Comunidad Autónoma', 'Media', 'Coef. de variación'),
+      digits = c(0, 2, 3)) %>%
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover"),
+                full_width = FALSE)
+```
+
+
